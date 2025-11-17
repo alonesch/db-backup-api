@@ -1,11 +1,9 @@
-FROM mysql:8.0-debian
+FROM alpine:latest
 
-# Criar diretório para backups
-RUN mkdir -p /data
+RUN apk update && apk add --no-cache bash mysql-client git
 
-# Copiar script
-COPY backup.sh /backup.sh
-RUN chmod +x /backup.sh
+WORKDIR /app
+COPY backup.sh /app/backup.sh
+RUN chmod +x /app/backup.sh
 
-# Comando padrão
-CMD ["/backup.sh"]
+CMD ["/app/backup.sh"]
