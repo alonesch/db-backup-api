@@ -1,16 +1,17 @@
 FROM ubuntu:22.04
 
-# Instala cliente MariaDB/MySQL + git + bash + timezone
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=America/Sao_Paulo
+
+# Instala mariadb-client + git + bash + timezone sem interação
 RUN apt-get update && apt-get install -y \
     mariadb-client \
     git \
     bash \
     tzdata
 
-# Cria pasta de backup
 RUN mkdir -p /data
 
-# Copia script
 COPY backup.sh /backup.sh
 RUN chmod +x /backup.sh
 
