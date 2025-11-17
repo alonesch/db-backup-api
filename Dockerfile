@@ -1,9 +1,17 @@
-FROM alpine:latest
+FROM ubuntu:22.04
 
-RUN apk update && apk add --no-cache bash mysql-client git
+# Instala cliente MariaDB/MySQL + git + bash + timezone
+RUN apt-get update && apt-get install -y \
+    mariadb-client \
+    git \
+    bash \
+    tzdata
 
-WORKDIR /app
-COPY backup.sh /app/backup.sh
-RUN chmod +x /app/backup.sh
+# Cria pasta de backup
+RUN mkdir -p /data
 
-CMD ["/app/backup.sh"]
+# Copia script
+COPY backup.sh /backup.sh
+RUN chmod +x /backup.sh
+
+CMD ["/backup.sh"]
