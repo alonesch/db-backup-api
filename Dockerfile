@@ -1,11 +1,13 @@
-FROM mysql:9.0-oracle
+FROM mysql:8.0-debian
 
-# Instala bash no container
+# Instala bash e cron
 RUN apt-get update && apt-get install -y bash
 
 # Copia o script
 COPY backup.sh /backup.sh
+
+# Dá permissão
 RUN chmod +x /backup.sh
 
-# Ponto de entrada padrão (não roda sozinho)
-CMD ["/bin/bash", "/backup.sh"]
+# Comando padrão
+CMD ["bash", "/backup.sh"]
