@@ -1,20 +1,18 @@
 #!/bin/bash
 set -e
 
-echo "Iniciando backup do MySQL..."
+echo "Iniciando backup do MySQL/MariaDB..."
 
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M")
 FILENAME="backup-$TIMESTAMP.sql"
 FILEPATH="$BACKUP_PATH/$FILENAME"
 
-mysqldump \
-  --ssl-mode=DISABLED \
+# MariaDB usa o comando mariadb-dump
+mariadb-dump \
   -h "$DB_HOST" \
   -P "$DB_PORT" \
   -u "$DB_USER" \
   -p"$DB_PASS" \
-  --single-transaction \
-  --set-gtid-purged=OFF \
   "$DB_NAME" > "$FILEPATH"
 
 echo "Backup gerado: $FILEPATH"
