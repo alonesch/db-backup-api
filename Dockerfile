@@ -1,4 +1,4 @@
-FROM mysql:9.0
+FROM mysql:9.0-oracle
 
 # Instala bash no container
 RUN apt-get update && apt-get install -y bash
