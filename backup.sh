@@ -7,12 +7,15 @@ TIMESTAMP=$(date +"%Y-%m-%d_%H-%M")
 FILENAME="backup-$TIMESTAMP.sql"
 FILEPATH="$BACKUP_PATH/$FILENAME"
 
-mysqldump --single-transaction \
-  -h "$MYSQL_HOST" \
-  -P "$MYSQL_PORT" \
-  -u "$MYSQL_USER" \
-  -p"$MYSQL_PASSWORD" \
-  "$MYSQL_DATABASE" > "$FILEPATH"
+mysqldump \
+  --ssl-mode=DISABLED \
+  -h "$DB_HOST" \
+  -P "$DB_PORT" \
+  -u "$DB_USER" \
+  -p"$DB_PASS" \
+  --single-transaction \
+  --set-gtid-purged=OFF \
+  "$DB_NAME" > "$FILEPATH"
 
 echo "Backup gerado: $FILEPATH"
 
