@@ -5,14 +5,13 @@ echo "Iniciando backup do MySQL/MariaDB..."
 
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M")
 FILENAME="backup-$TIMESTAMP.sql"
-FILEPATH="$BACKUP_PATH/$FILENAME"
+FILEPATH="/data/$FILENAME"
 
-# MariaDB usa o comando mariadb-dump
 mariadb-dump \
   -h "$DB_HOST" \
   -P "$DB_PORT" \
   -u "$DB_USER" \
-  -p"$DB_PASS" \
+  --password="$DB_PASS" \
   "$DB_NAME" > "$FILEPATH"
 
 echo "Backup gerado: $FILEPATH"
