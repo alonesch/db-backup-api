@@ -8,11 +8,11 @@ FILENAME="backup-$TIMESTAMP.sql"
 FILEPATH="/data/$FILENAME"
 
 mariadb-dump \
-  -h "$DB_HOST" \
-  -P "$DB_PORT" \
-  -u "$DB_USER" \
-  --password="$DB_PASS" \
-  "$DB_NAME" > "$FILEPATH"
+  -h "$MYSQL_HOST" \
+  -P "$MYSQL_PORT" \
+  -u "$MYSQL_USER" \
+  --password="$MYSQL_PASSWORD" \
+  "$MYSQL_DATABASE" > "$FILEPATH"
 
 echo "Backup gerado: $FILEPATH"
 
