@@ -1,24 +1,35 @@
 #!/bin/bash
 set -e
 
-
-# Exibe início do processo
 echo "Iniciando backup do MySQL..."
 
-# Puxa variáveis de ambiente
-HOST=$MYSQL_HOST
-PORT=$MYSQL_PORT
-USER=$MYSQL_USER
-PASS=$MYSQL_PASSWORD
-DB=$MYSQL_DATABASE
+TIMESTAMP=$(date +"%Y-%m-%d_%H-%M")
+FILENAME="backup-$TIMESTAMP.sql"
+FILEPATH="$BACKUP_PATH/$FILENAME"
 
-# Nome do arquivo com data
-DATA=$(date +"%Y-%m-%d_%H-%M")
-ARQUIVO="backup-$DATA.sql"
+mysqldump --single-transaction \
+  -h "$MYSQL_HOST" \
+  -P "$MYSQL_PORT" \
+  -u "$MYSQL_USER" \
+  -p"$MYSQL_PASSWORD" \
+  "$MYSQL_DATABASE" > "$FILEPATH"
 
-# Gera o backup
-mysqldump --single-transaction --set-gtid-purged=OFF \
-  -h $HOST -P $PORT -u $USER -p$PASS $DB > "/data/$ARQUIVO"
+echo "Backup gerado: $FILEPATH"
 
-echo "Backup gerado: /data/$ARQUIVO"
-echo "Concluído com sucesso."
+echo "Enviando backup para o GitHub..."
+
+cd /tmp
+git clone https://"$GITHUB_USERNAME":"$GITHUB_TOKEN"@github.com/"$GITHUB_REPO".git repo
+cd repo
+
+mkdir -p backups
+cp "$FILEPATH" backups/
+
+git config user.email "backup@railway"
+git config user.name "Railway Backup Bot"
+
+git add backups/
+git commit -m "Backup automático - $TIMESTAMP"
+git push
+
+echo "Backup enviado com sucesso!"
