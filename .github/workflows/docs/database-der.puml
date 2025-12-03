@@ -1,0 +1,102 @@
+@startuml
+title DER - Barbearia Portifolio
+
+' Configurações visuais
+skinparam entity {
+  BackgroundColor #f7f7f7
+  BorderColor #555
+  ArrowColor #555
+}
+
+skinparam linetype ortho
+
+' =============================
+' TABELAS
+' =============================
+
+entity "Cliente" as Cliente {
+  *Id : int <<PK>>
+  --
+  Nome : varchar
+  Cpf : varchar
+  Telefone : varchar
+  DataCadastro : timestamp
+}
+
+entity "Barbeiro" as Barbeiro {
+  *Id : int <<PK>>
+  --
+  Nome : varchar
+  Telefone : varchar
+  UsuarioId : int <<FK>>
+}
+
+entity "Usuarios" as Usuarios {
+  *Id : int <<PK>>
+  --
+  NomeUsuario : text
+  SenhaHash : text
+  NomeCompleto : text
+  Cargo : text
+  Role : text
+  Ativo : bool
+}
+
+entity "Servico" as Servico {
+  *Id : int <<PK>>
+  --
+  NomeServico : varchar
+  Preco : numeric
+}
+
+entity "Agendamento" as Agendamento {
+  *Id : int <<PK>>
+  --
+  ClienteId : int <<FK>>
+  BarbeiroId : int <<FK>>
+  DataHora : timestamp
+  Status : int
+  DataRegistro : timestamp
+  Observacao : varchar
+}
+
+entity "AgendamentoServicos" as AgendamentoServicos {
+  *AgendamentoId : int <<PK, FK>>
+  *ServicoId : int <<PK, FK>>
+  --
+  Observacao : text
+}
+
+entity "RefreshTokens" as RefreshTokens {
+  *Id : int <<PK>>
+  --
+  UsuarioId : int <<FK>>
+  TokenHash : text
+  ExpiraEm : timestamp
+  Revogado : bool
+  CriadoEm : timestamp
+}
+
+' =============================
+' RELACIONAMENTOS
+' =============================
+
+' Cliente 1 --- N Agendamento
+Cliente ||--o{ Agendamento : "cliente"
+
+' Barbeiro 1 --- N Agendamento
+Barbeiro ||--o{ Agendamento : "barbeiro"
+
+' Agendamento 1 --- N AgendamentoServicos
+Agendamento ||--o{ AgendamentoServicos : "itens"
+
+' Servico 1 --- N AgendamentoServicos
+Servico ||--o{ AgendamentoServicos : "itens"
+
+' Usuario 1 --- N Barbeiro (opcional)
+Usuarios ||--o{ Barbeiro : "usuario"
+
+' Usuario 1 --- N RefreshTokens
+Usuarios ||--o{ RefreshTokens : "tokens"
+
+@enduml
