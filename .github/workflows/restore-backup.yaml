@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       backup_file:
-        description: "Nome do arquivo em backups/ a restaurar (ex: backup-2025-12-03_17-46.sql.gz.gpg)"
+        description: "Nome do arquivo em backups/ a restaurar (ex: backup-2025-12-03_18-01.sql.gz.gpg)"
         required: true
         type: string
 
@@ -24,20 +24,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gnupg
 
-      - name: Restore FULL CLEAN
+      - name: Full Clean Restore
         env:
           POSTGRES_CONNECTION: ${{ secrets.POSTGRES_CONNECTION }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
           BACKUP_FILE: ${{ github.event.inputs.backup_file }}
         run: |
+          set -e
           cd backups
 
+          echo "===================================="
+          echo " RESTORE FULL CLEAN — INICIADO"
+          echo " Backup: $BACKUP_FILE"
+          echo "===================================="
+
           if [ ! -f "$BACKUP_FILE" ]; then
-            echo "Arquivo $BACKUP_FILE não encontrado em backups/"
+            echo "ERRO: Arquivo $BACKUP_FILE não encontrado na pasta backups/"
             exit 1
           fi
 
-          echo "Descriptografando arquivo: $BACKUP_FILE"
+          echo "Descriptografando..."
           gpg --batch --yes \
             --decrypt \
             --passphrase "$BACKUP_PASSPHRASE" \
@@ -46,33 +52,46 @@ jobs:
           echo "Descompactando restore.sql.gz..."
           gunzip -f restore.sql.gz   # gera restore.sql
 
-          echo "Criando novo database (FULL CLEAN)..."
+          echo "Extraindo parâmetros da connection string..."
 
-          # Extrai a senha da connection string
+          
           PGPASSWORD=$(echo "$POSTGRES_CONNECTION" | sed -E 's|.*://([^:]+):([^@]+)@.*|\2|')
 
-          # Extrai componentes do POSTGRES_CONNECTION
-          HOST=$(echo "$POSTGRES_CONNECTION" | sed -E 's|.*@([^/:]+).*|\1|')
-          PORT=$(echo "$POSTGRES_CONNECTION" | sed -E 's|.*:([0-9]+)/.*|\1|')
+          
           USER=$(echo "$POSTGRES_CONNECTION" | sed -E 's|.*://([^:]+):.*|\1|')
+
+          
+          HOST=$(echo "$POSTGRES_CONNECTION" | sed -E 's|.*@([^/:]+).*|\1|')
+
+          
+          PORT=$(echo "$POSTGRES_CONNECTION" | sed -nE 's|.*:([0-9]+)/.*|\1|p')
+          if [ -z "$PORT" ]; then
+            PORT=5432
+          fi
 
           TIMESTAMP=$(date +"%Y_%m_%d_%H_%M")
           NEW_DB="db-barber-restored-$TIMESTAMP"
 
-          echo "Novo database: $NEW_DB"
-
-          # Cria o database limpo
-          docker run --rm \
-            -e PGPASSWORD="$PGPASSWORD" \
-            postgres:18 \
-            sh -c "createdb -h $HOST -p $PORT -U $USER $NEW_DB"
-
-          echo "Database criado com sucesso. Iniciando restore..."
+          echo "===================================="
+          echo " Criando novo database:"
+          echo " $NEW_DB"
+          echo "===================================="
 
           docker run --rm \
             -e PGPASSWORD="$PGPASSWORD" \
-            -v \"$(pwd)\":/data \
             postgres:18 \
-            sh -c \"psql -h $HOST -p $PORT -U $USER $NEW_DB < /data/restore.sql\"
+            createdb -h "$HOST" -p "$PORT" -U "$USER" "$NEW_DB"
 
-          echo "Restore FULL CLEAN concluído com sucesso."
+          echo "Database criado. Iniciando restore..."
+
+          docker run --rm \
+            -e PGPASSWORD="$PGPASSWORD" \
+            -v "$(pwd)":/data \
+            postgres:18 \
+            sh -c "psql -h $HOST -p $PORT -U $USER $NEW_DB < /data/restore.sql"
+
+          echo "===================================="
+          echo " RESTORE FINALIZADO COM SUCESSO"
+          echo " Novo banco criado:"
+          echo " $NEW_DB"
+          echo "===================================="
