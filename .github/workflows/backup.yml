@@ -1,0 +1,38 @@
+name: Daily PostgreSQL Backup
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Run pg_dump
+        env:
+          POSTGRES_CONNECTION: ${{ secrets.POSTGRES_CONNECTION }}
+        run: |
+          TIMESTAMP=$(date +"%Y-%m-%d_%H-%M")
+          FILE="backup-$TIMESTAMP.sql"
+          mkdir -p backups
+          pg_dump "$POSTGRES_CONNECTION" > "backups/$FILE"
+          echo "Backup gerado: backups/$FILE"
+
+      - name: Commit and push backup
+        env:
+          BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
+          BOT_EMAIL: ${{ secrets.BOT_EMAIL }}
+        run: |
+          git config user.name "$BOT_USERNAME"
+          git config user.email "$BOT_EMAIL"
+          git add backups/
+          git commit -m "Backup automático - $(date '+%Y-%m-%d %H:%M')" || echo "Nenhum backup novo para commitar"
+          git push
