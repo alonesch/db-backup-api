@@ -2,11 +2,11 @@ name: Daily PostgreSQL Backup
 
 on:
   schedule:
-    - cron: "0 3 * * *"   
-  workflow_dispatch:       
+    - cron: "0 3 * * *"
+  workflow_dispatch:
 
 permissions:
-  contents: write          
+  contents: write
 
 jobs:
   backup:
@@ -16,7 +16,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Run pg_dump using PostgreSQL 18 Docker image + retention
+      - name: Run pg_dump using PostgreSQL 18 Docker image + retention + compression
         env:
           POSTGRES_CONNECTION: ${{ secrets.POSTGRES_CONNECTION }}
           RETENTION_DAYS: ${{ secrets.RETENTION_DAYS }}
@@ -24,34 +24,38 @@ jobs:
           mkdir -p backups
 
           echo "============================="
-          echo "  INICIANDO ROTINA DE RETENÇÃO"
+          echo " INICIANDO ROTINA DE RETENÇÃO"
           echo "Mantendo últimos $RETENTION_DAYS dias"
           echo "============================="
 
-          # Contar backups antigos
-          OLD_FILES_COUNT=$(find backups -type f -name "backup-*.sql" -mtime +$RETENTION_DAYS | wc -l)
+          # Remover backups antigos (.sql.gz)
+          OLD_FILES_COUNT=$(find backups -type f -name "backup-*.sql.gz" -mtime +$RETENTION_DAYS | wc -l)
 
           if [ "$OLD_FILES_COUNT" -gt 0 ]; then
-            echo "  Removendo $OLD_FILES_COUNT backups antigos:"
-            find backups -type f -name "backup-*.sql" -mtime +$RETENTION_DAYS -print -delete
+            echo "Removendo $OLD_FILES_COUNT backups antigos:"
+            find backups -type f -name "backup-*.sql.gz" -mtime +$RETENTION_DAYS -print -delete
           else
             echo "Nenhum backup antigo encontrado para remover."
           fi
 
           echo "============================="
-          echo "  GERANDO BACKUP NOVO"
+          echo " GERANDO BACKUP NOVO"
           echo "============================="
 
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M")
           FILE="backup-$TIMESTAMP.sql"
+          FILE_GZ="$FILE.gz"
 
-          # Executa pg_dump via Docker usando postgres:18
+          # Gera o backup .sql
           docker run --rm \
             -e PGPASSWORD=$(echo "$POSTGRES_CONNECTION" | sed -E 's|.*://([^:]+):([^@]+)@.*|\2|') \
             postgres:18 \
             sh -c "pg_dump \"$POSTGRES_CONNECTION\"" > "backups/$FILE"
 
-          echo "Backup gerado em backups/$FILE"
+          echo "Compactando backup..."
+          gzip "backups/$FILE"
+
+          echo "Backup final gerado: backups/$FILE_GZ"
 
       - name: Commit and push backup
         env:
