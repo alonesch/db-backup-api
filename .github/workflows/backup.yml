@@ -13,12 +13,15 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Install PostgreSQL 18 client
+      - name: Download PostgreSQL 18 pg_dump
         run: |
-          sudo sh -c 'echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt `lsb_release -cs`-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/keyrings/pgdg.gpg >/dev/null
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-18
+          wget https://ftp.postgresql.org/pub/source/v18.1/postgresql-18.1.tar.gz
+          tar -xzf postgresql-18.1.tar.gz
+          cd postgresql-18.1
+          ./configure --without-readline --without-zlib
+          make -C src/bin/pg_dump
+          sudo cp src/bin/pg_dump/pg_dump /usr/local/bin
+          pg_dump --version
 
       - name: Run pg_dump
         env:
@@ -28,15 +31,4 @@ jobs:
           FILE="backup-$TIMESTAMP.sql"
           mkdir -p backups
           pg_dump "$POSTGRES_CONNECTION" > "backups/$FILE"
-          echo "Backup gerado: backups/$FILE"
-
-      - name: Commit and push backup
-        env:
-          BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
-          BOT_EMAIL: ${{ secrets.BOT_EMAIL }}
-        run: |
-          git config user.name "$BOT_USERNAME"
-          git config user.email "$BOT_EMAIL"
-          git add backups/
-          git commit -m "Backup automático - $(date '+%Y-%m-%d %H:%M')" || echo "Nenhum backup novo para commitar"
-          git push
+          echo "Backup gerado: backups/$FIL
