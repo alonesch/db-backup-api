@@ -2,8 +2,8 @@ name: Daily PostgreSQL Backup
 
 on:
   schedule:
-    - cron: "0 3 * * *"
-  workflow_dispatch:
+    - cron: "0 3 * * *"    
+  workflow_dispatch:        
 
 permissions:
   contents: write
@@ -16,26 +16,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Run pg_dump using PostgreSQL 18 Docker image + retention + compression
+      - name: Install GPG
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg
+
+      - name: Run pg_dump using PostgreSQL 18 Docker image + retention + compression + encryption
         env:
           POSTGRES_CONNECTION: ${{ secrets.POSTGRES_CONNECTION }}
           RETENTION_DAYS: ${{ secrets.RETENTION_DAYS }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           mkdir -p backups
 
           echo "============================="
-          echo " INICIANDO ROTINA DE RETENÇÃO"
+          echo " INICIANDO ROTINA DE RETENÇÃO POR DIAS"
           echo "Mantendo últimos $RETENTION_DAYS dias"
           echo "============================="
 
-          # Remover backups antigos (.sql.gz)
-          OLD_FILES_COUNT=$(find backups -type f -name "backup-*.sql.gz" -mtime +$RETENTION_DAYS | wc -l)
+          # Remover backups antigos por idade (.sql.gz.gpg)
+          OLD_FILES_COUNT_BY_DAYS=$(find backups -type f -name "backup-*.sql.gz.gpg" -mtime +$RETENTION_DAYS | wc -l)
 
-          if [ "$OLD_FILES_COUNT" -gt 0 ]; then
-            echo "Removendo $OLD_FILES_COUNT backups antigos:"
-            find backups -type f -name "backup-*.sql.gz" -mtime +$RETENTION_DAYS -print -delete
+          if [ "$OLD_FILES_COUNT_BY_DAYS" -gt 0 ]; then
+            echo "Removendo $OLD_FILES_COUNT_BY_DAYS backups antigos por idade:"
+            find backups -type f -name "backup-*.sql.gz.gpg" -mtime +$RETENTION_DAYS -print -delete
           else
-            echo "Nenhum backup antigo encontrado para remover."
+            echo "Nenhum backup antigo por idade encontrado para remover."
           fi
 
           echo "============================="
@@ -45,17 +51,59 @@ jobs:
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M")
           FILE="backup-$TIMESTAMP.sql"
           FILE_GZ="$FILE.gz"
+          FILE_GPG="$FILE_GZ.gpg"
 
-          # Gera o backup .sql
+          # Gera o backup .sql via Docker postgres:18
           docker run --rm \
             -e PGPASSWORD=$(echo "$POSTGRES_CONNECTION" | sed -E 's|.*://([^:]+):([^@]+)@.*|\2|') \
             postgres:18 \
             sh -c "pg_dump \"$POSTGRES_CONNECTION\"" > "backups/$FILE"
 
-          echo "Compactando backup..."
-          gzip "backups/$FILE"
+          echo "Compactando backup para gzip..."
+          gzip "backups/$FILE"   # gera backup-...sql.gz e remove o .sql original
 
-          echo "Backup final gerado: backups/$FILE_GZ"
+          echo "Validando integridade do gzip..."
+          gunzip -t "backups/$FILE_GZ"
+
+          echo "Criptografando com AES-256 (GPG simétrico)..."
+          gpg --batch --yes \
+            --symmetric \
+            --cipher-algo AES256 \
+            --passphrase "$BACKUP_PASSPHRASE" \
+            -o "backups/$FILE_GPG" \
+            "backups/$FILE_GZ"
+
+          # Remove o .gz, mantém apenas .gz.gpg
+          rm "backups/$FILE_GZ"
+
+          echo "Validando arquivo criptografado (tentando descriptografar em /dev/null)..."
+          gpg --batch --yes \
+            --decrypt \
+            --passphrase "$BACKUP_PASSPHRASE" \
+            "backups/$FILE_GPG" > /dev/null
+
+          echo "============================="
+          echo " APLICANDO RETENÇÃO POR QUANTIDADE"
+          echo "Mantendo no máximo 7 backups"
+          echo "============================="
+
+          # Mantém no máximo 7 arquivos, apaga excedentes mais antigos
+          MAX_BACKUPS=7
+          BACKUP_LIST=$(ls -1t backups/backup-*.sql.gz.gpg 2>/dev/null || true)
+          BACKUP_COUNT=$(echo "$BACKUP_LIST" | wc -l)
+
+          if [ "$BACKUP_COUNT" -gt "$MAX_BACKUPS" ]; then
+            TO_DELETE_COUNT=$((BACKUP_COUNT - MAX_BACKUPS))
+            echo "Total de backups: $BACKUP_COUNT. Removendo $TO_DELETE_COUNT mais antigos por quantidade."
+            echo "$BACKUP_LIST" | tail -n "$TO_DELETE_COUNT" | while read FILEPATH; do
+              echo "Removendo: $FILEPATH"
+              rm "$FILEPATH"
+            done
+          else
+            echo "Quantidade de backups dentro do limite ($BACKUP_COUNT / $MAX_BACKUPS)."
+          fi
+
+          echo "Backup final gerado: backups/$FILE_GPG"
 
       - name: Commit and push backup
         env:

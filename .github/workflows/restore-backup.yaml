@@ -1,0 +1,59 @@
+name: Restore PostgreSQL Backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_file:
+        description: "Nome do arquivo em backups/ a restaurar (ex: backup-2025-12-03_17-46.sql.gz.gpg)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install GPG
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg
+
+      - name: Restore backup
+        env:
+          POSTGRES_CONNECTION: ${{ secrets.POSTGRES_CONNECTION }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          BACKUP_FILE: ${{ github.event.inputs.backup_file }}
+        run: |
+          cd backups
+
+          if [ ! -f "$BACKUP_FILE" ]; then
+            echo "Arquivo $BACKUP_FILE não encontrado em backups/"
+            exit 1
+          fi
+
+          echo "Descriptografando arquivo: $BACKUP_FILE"
+          gpg --batch --yes \
+            --decrypt \
+            --passphrase "$BACKUP_PASSPHRASE" \
+            "$BACKUP_FILE" > restore.sql.gz
+
+          echo "Descompactando restore.sql.gz..."
+          gunzip -f restore.sql.gz   # gera restore.sql
+
+          echo "Restaurando no banco de dados alvo..."
+          # Extrai a senha do POSTGRES_CONNECTION
+          PGPASSWORD=$(echo "$POSTGRES_CONNECTION" | sed -E 's|.*://([^:]+):([^@]+)@.*|\2|')
+
+          docker run --rm \
+            -e PGPASSWORD="$PGPASSWORD" \
+            -v "$(pwd)":/data \
+            postgres:18 \
+            sh -c "psql \"$POSTGRES_CONNECTION\" < /data/restore.sql"
+
+          echo "Restauração concluída com sucesso."
