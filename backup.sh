@@ -1,25 +1,17 @@
 #!/bin/bash
 set -e
 
-echo "Iniciando backup do MySQL/MariaDB..."
+echo "Iniciando backup do PostgreSQL..."
 
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M")
 FILENAME="backup-$TIMESTAMP.sql"
 FILEPATH="/tmp/$FILENAME"
 
-echo "Conectando em:"
-echo "Host: $MYSQL_HOST"
-echo "Porta: $MYSQL_PORT"
-echo "User: $MYSQL_USER"
-echo "Banco: $MYSQL_DATABASE"
+echo "Connection string:"
+echo "$POSTGRES_CONNECTION"
 
-# Dump
-mariadb-dump \
-  -h "$MYSQL_HOST" \
-  -P "$MYSQL_PORT" \
-  -u "$MYSQL_USER" \
-  --password="$MYSQL_PASSWORD" \
-  "$MYSQL_DATABASE" > "$FILEPATH"
+# Dump do PostgreSQL
+pg_dump "$POSTGRES_CONNECTION" > "$FILEPATH"
 
 echo "Backup gerado: $FILEPATH"
 
@@ -34,8 +26,8 @@ cd repo
 mkdir -p backups
 cp "$FILEPATH" backups/
 
-git config user.email "backup@railway"
-git config user.name "Railway Backup Bot"
+git config user.email "backup@render"
+git config user.name "Render Backup Bot"
 
 git add backups/
 git commit -m "Backup automático - $TIMESTAMP"
