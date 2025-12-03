@@ -1,38 +1,35 @@
-name: Daily PostgreSQL Backup
-
-on:
-  schedule:
-    - cron: "0 3 * * *"
-  workflow_dispatch:
-
-jobs:
-  backup:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
-
-      - name: Run pg_dump using PostgreSQL 18 Docker image
+      - name: Run pg_dump using PostgreSQL 18 Docker image + retention
         env:
           POSTGRES_CONNECTION: ${{ secrets.POSTGRES_CONNECTION }}
+          RETENTION_DAYS: ${{ secrets.RETENTION_DAYS }}
         run: |
+          mkdir -p backups
+
+          echo "============================="
+          echo " INICIANDO ROTINA DE RETENÇÃO"
+          echo "Manter últimos $RETENTION_DAYS dias"
+          echo "============================="
+
+          # Apaga arquivos antigos (exceto o que será gerado agora)
+          OLD_FILES_COUNT=$(find backups -type f -name "backup-*.sql" -mtime +$RETENTION_DAYS | wc -l)
+
+          if [ "$OLD_FILES_COUNT" -gt 0 ]; then
+            echo "  Apagando $OLD_FILES_COUNT backups antigos..."
+            find backups -type f -name "backup-*.sql" -mtime +$RETENTION_DAYS -print -delete
+          else
+            echo "Nenhum backup antigo encontrado para remover."
+          fi
+
+          echo "============================="
+          echo " GERANDO BACKUP NOVO"
+          echo "============================="
+
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M")
           FILE="backup-$TIMESTAMP.sql"
-          mkdir -p backups
+
           docker run --rm \
             -e PGPASSWORD=$(echo "$POSTGRES_CONNECTION" | sed -E 's|.*://([^:]+):([^@]+)@.*|\2|') \
             postgres:18 \
             sh -c "pg_dump \"$POSTGRES_CONNECTION\"" > "backups/$FILE"
-          echo "Backup gerado: backups/$FILE"
 
-      - name: Commit and push backup
-        env:
-          BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
-          BOT_EMAIL: ${{ secrets.BOT_EMAIL }}
-        run: |
-          git config user.name "$BOT_USERNAME"
-          git config user.email "$BOT_EMAIL"
-          git add backups/
-          git commit -m "Backup automático - $(date '+%Y-%m-%d %H:%M')" || echo "Nenhum backup novo para commitar"
-          git push
+          echo "Backup gerado: backups/$FILE"
