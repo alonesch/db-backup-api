@@ -1,4 +1,4 @@
-name: Restore PostgreSQL Backup
+name: Restore PostgreSQL Backup (Full Clean)
 
 on:
   workflow_dispatch:
@@ -24,7 +24,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gnupg
 
-      - name: Restore backup
+      - name: Restore FULL CLEAN
         env:
           POSTGRES_CONNECTION: ${{ secrets.POSTGRES_CONNECTION }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
@@ -46,14 +46,33 @@ jobs:
           echo "Descompactando restore.sql.gz..."
           gunzip -f restore.sql.gz   # gera restore.sql
 
-          echo "Restaurando no banco de dados alvo..."
-          # Extrai a senha do POSTGRES_CONNECTION
+          echo "Criando novo database (FULL CLEAN)..."
+
+          # Extrai a senha da connection string
           PGPASSWORD=$(echo "$POSTGRES_CONNECTION" | sed -E 's|.*://([^:]+):([^@]+)@.*|\2|')
+
+          # Extrai componentes do POSTGRES_CONNECTION
+          HOST=$(echo "$POSTGRES_CONNECTION" | sed -E 's|.*@([^/:]+).*|\1|')
+          PORT=$(echo "$POSTGRES_CONNECTION" | sed -E 's|.*:([0-9]+)/.*|\1|')
+          USER=$(echo "$POSTGRES_CONNECTION" | sed -E 's|.*://([^:]+):.*|\1|')
+
+          TIMESTAMP=$(date +"%Y_%m_%d_%H_%M")
+          NEW_DB="db-barber-restored-$TIMESTAMP"
+
+          echo "Novo database: $NEW_DB"
+
+          # Cria o database limpo
+          docker run --rm \
+            -e PGPASSWORD="$PGPASSWORD" \
+            postgres:18 \
+            sh -c "createdb -h $HOST -p $PORT -U $USER $NEW_DB"
+
+          echo "Database criado com sucesso. Iniciando restore..."
 
           docker run --rm \
             -e PGPASSWORD="$PGPASSWORD" \
-            -v "$(pwd)":/data \
+            -v \"$(pwd)\":/data \
             postgres:18 \
-            sh -c "psql \"$POSTGRES_CONNECTION\" < /data/restore.sql"
+            sh -c \"psql -h $HOST -p $PORT -U $USER $NEW_DB < /data/restore.sql\"
 
-          echo "Restauração concluída com sucesso."
+          echo "Restore FULL CLEAN concluído com sucesso."
